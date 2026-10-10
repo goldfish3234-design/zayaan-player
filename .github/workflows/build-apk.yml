@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
@@ -83,3 +86,11 @@ jobs:
         with:
           name: zayaan-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish APK to Releases (direct download, no zip)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk ZAYAAN.apk
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest ZAYAAN.apk --title "ZAYAAN latest APK" --notes "Latest build. Download ZAYAAN.apk and install." --target "${{ github.sha }}"
