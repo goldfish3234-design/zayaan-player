@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:photo_manager/photo_manager.dart';
 
 import 'library.dart';
 import 'player.dart';
@@ -71,10 +72,9 @@ class _ThumbState extends State<Thumb> {
 }
 
 class Pill extends StatelessWidget {
-  final IconData? icon;
   final Color dot;
   final String text;
-  const Pill({super.key, this.icon, required this.dot, required this.text});
+  const Pill({super.key, required this.dot, required this.text});
 
   @override
   Widget build(BuildContext context) {
