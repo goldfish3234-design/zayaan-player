@@ -26,6 +26,40 @@ jobs:
       - name: Set app name
         run: sed -i 's/android:label="[^"]*"/android:label="ZAYAAN"/' android/app/src/main/AndroidManifest.xml
 
+      - name: Force compileSdk 36 for plugins
+        run: |
+          if [ -f android/build.gradle.kts ]; then
+          cat >> android/build.gradle.kts <<'EOF'
+
+          subprojects {
+              if (!project.state.executed) {
+                  project.afterEvaluate {
+                      if (project.hasProperty("android")) {
+                          project.extensions.configure<com.android.build.gradle.BaseExtension> {
+                              compileSdkVersion(36)
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+          else
+          cat >> android/build.gradle <<'EOF'
+
+          subprojects {
+              if (!project.state.executed) {
+                  project.afterEvaluate {
+                      if (project.hasProperty("android")) {
+                          project.android {
+                              compileSdkVersion 36
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+          fi
+
       - name: Get packages
         run: flutter pub get
 
