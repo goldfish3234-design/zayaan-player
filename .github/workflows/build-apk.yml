@@ -1,7 +1,12 @@
 name: Build APK
 
 on:
+  push:
   workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -24,6 +29,14 @@ jobs:
 
       - name: Set app name
         run: sed -i 's/android:label="[^"]*"/android:label="ZAYAAN"/' android/app/src/main/AndroidManifest.xml
+
+      - name: Add media permissions
+        run: |
+          sed -i 's#<application#<uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          grep -n "uses-permission" android/app/src/main/AndroidManifest.xml
+
+      - name: Add Z launcher icon
+        run: cp -r android_res/. android/app/src/main/res/
 
       - name: Force compileSdk 36 for plugins
         run: |
