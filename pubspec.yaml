@@ -1,7 +1,7 @@
 name: zayaan_player
-description: ZAYAAN - Android video player
+description: ZAYAAN - Android video and music player
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   video_player: ^2.9.2
   file_picker: ^8.1.2
+  photo_manager: ^3.6.0
+  shared_preferences: ^2.3.2
 
 dev_dependencies:
   flutter_test:
