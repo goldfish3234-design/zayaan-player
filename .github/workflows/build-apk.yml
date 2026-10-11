@@ -41,6 +41,12 @@ jobs:
       - name: Add Z launcher icon
         run: cp -r android_res/. android/app/src/main/res/
 
+      - name: Add native brightness and volume support
+        run: |
+          F=$(find android/app/src/main -name MainActivity.kt | head -n 1)
+          echo "MainActivity at: $F"
+          cp android_native/MainActivity.kt "$F"
+
       - name: Force compileSdk 36 for plugins
         run: |
           if [ -f android/build.gradle.kts ]; then
