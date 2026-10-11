@@ -5,6 +5,7 @@ import 'package:photo_manager/photo_manager.dart';
 
 import 'library.dart';
 import 'player.dart';
+import 'system.dart';
 import 'theme.dart';
 
 void openPlayer(BuildContext context, List<MediaItem> items, int index) {
@@ -30,9 +31,23 @@ class _ThumbState extends State<Thumb> {
   void initState() {
     super.initState();
     final a = widget.item.asset;
-    if (a != null && !widget.item.isAudio) {
+    if (widget.item.isAudio) {
+      _f = _audioArt();
+    } else if (a != null) {
       _f = a.thumbnailDataWithSize(const ThumbnailSize(240, 180));
     }
+  }
+
+  Future<Uint8List?> _audioArt() async {
+    final it = widget.item;
+    String? p = it.path;
+    if (p == null) {
+      final f = await it.asset?.file;
+      p = f?.path;
+    }
+    if (p == null) return null;
+    final m = await Sys.audioMeta(it.id, p);
+    return m.art;
   }
 
   @override
@@ -47,7 +62,12 @@ class _ThumbState extends State<Thumb> {
           builder: (context, snap) {
             final d = snap.data;
             if (d != null) {
-              return Image.memory(d, fit: BoxFit.cover, gaplessPlayback: true);
+              return Image.memory(
+                d,
+                fit: BoxFit.cover,
+                cacheWidth: 240,
+                gaplessPlayback: true,
+              );
             }
             return Container(
               decoration: const BoxDecoration(
@@ -111,6 +131,8 @@ class MediaTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fav = library.isFav(item.id);
+    final q = item.quality;
+    final prog = library.progressOf(item.id);
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -140,18 +162,31 @@ class MediaTile extends StatelessWidget {
                     style: const TextStyle(color: C.muted, fontSize: 12),
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       Pill(dot: Colors.white54, text: fmtDur(item.seconds)),
-                      const SizedBox(width: 6),
                       Pill(dot: C.pink, text: item.ext),
-                      if (fav) ...[
-                        const SizedBox(width: 6),
+                      if (q != null) Pill(dot: C.yellow, text: q),
+                      if (fav)
                         const Icon(Icons.favorite_rounded,
                             size: 15, color: C.yellow),
-                      ],
                     ],
                   ),
+                  if (prog > 0) ...[
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      child: LinearProgressIndicator(
+                        value: prog,
+                        minHeight: 3,
+                        color: C.pink,
+                        backgroundColor: Colors.white12,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -226,6 +261,114 @@ class MediaCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: body,
       ),
+    );
+  }
+}
+
+/// Small card used in the horizontal "Continue Watching" / "Recently Played"
+/// rows on the home screen.
+class HCard extends StatelessWidget {
+  final MediaItem item;
+  final double progress;
+  final VoidCallback onTap;
+  const HCard({
+    super.key,
+    required this.item,
+    required this.progress,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 150,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                Thumb(item: item, w: 150, h: 92),
+                if (progress > 0)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 4,
+                      color: C.pink,
+                      backgroundColor: Colors.black45,
+                    ),
+                  ),
+                Positioned(
+                  right: 6,
+                  top: 6,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      fmtDur(item.seconds),
+                      style: const TextStyle(fontSize: 10, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              item.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class HSection extends StatelessWidget {
+  final String title;
+  final List<MediaItem> items;
+  final bool showProgress;
+  const HSection({
+    super.key,
+    required this.title,
+    required this.items,
+    this.showProgress = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 22),
+        Text(title, style: const TextStyle(color: C.muted, fontSize: 16)),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 150,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) => HCard(
+              item: items[i],
+              progress: showProgress ? library.progressOf(items[i].id) : 0,
+              onTap: () => openPlayer(context, items, i),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
