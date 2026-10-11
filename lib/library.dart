@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +10,8 @@ class MediaItem {
   final String folder;
   final int seconds;
   final bool isAudio;
+  final int width;
+  final int height;
   final AssetEntity? asset;
   final String? path;
 
@@ -17,6 +21,8 @@ class MediaItem {
     required this.folder,
     required this.seconds,
     required this.isAudio,
+    this.width = 0,
+    this.height = 0,
     this.asset,
     this.path,
   });
@@ -32,6 +38,8 @@ class MediaItem {
       folder: rel.isEmpty ? 'Storage' : rel.last,
       seconds: a.duration,
       isAudio: a.type == AssetType.audio,
+      width: a.width,
+      height: a.height,
       asset: a,
     );
   }
@@ -40,6 +48,18 @@ class MediaItem {
     final i = title.lastIndexOf('.');
     if (i < 0 || i == title.length - 1) return isAudio ? 'AUDIO' : 'VIDEO';
     return title.substring(i + 1).toUpperCase();
+  }
+
+  /// "4K", "2K", "FHD", "HD" or "SD" for videos (null for audio / unknown).
+  String? get quality {
+    if (isAudio) return null;
+    final m = width > height ? width : height;
+    if (m <= 0) return null;
+    if (m >= 3800) return '4K';
+    if (m >= 2500) return '2K';
+    if (m >= 1900) return 'FHD';
+    if (m >= 1260) return 'HD';
+    return 'SD';
   }
 }
 
@@ -62,11 +82,14 @@ class Library extends ChangeNotifier {
   bool loading = true;
   bool denied = false;
   bool failed = false;
+  bool bgPlay = true;
   List<MediaItem> videos = [];
   List<MediaItem> audios = [];
   List<MediaFolder> folders = [];
   Set<String> favs = {};
   List<String> recents = [];
+  // id -> [positionMs, durationMs, lastPlayedAtMs]
+  Map<String, List<int>> _pos = {};
   SharedPreferences? _p;
   bool _started = false;
 
@@ -76,6 +99,21 @@ class Library extends ChangeNotifier {
     _p = await SharedPreferences.getInstance();
     favs = (_p!.getStringList('fav') ?? <String>[]).toSet();
     recents = _p!.getStringList('recent') ?? <String>[];
+    bgPlay = _p!.getBool('bg_play') ?? true;
+    final raw = _p!.getString('pos');
+    if (raw != null) {
+      try {
+        final m = jsonDecode(raw) as Map<String, dynamic>;
+        _pos = m.map(
+          (k, v) => MapEntry(
+            k,
+            (v as List).map((e) => (e as num).toInt()).toList(),
+          ),
+        );
+      } catch (_) {
+        _pos = {};
+      }
+    }
     await scan();
   }
 
@@ -150,6 +188,43 @@ class Library extends ChangeNotifier {
         for (final m in all)
           if (favs.contains(m.id)) m,
       ];
+
+  /// Videos that were started but not finished, latest first.
+  List<MediaItem> get continueItems {
+    final map = {for (final m in videos) m.id: m};
+    final ids = _pos.keys.where(map.containsKey).toList()
+      ..sort((a, b) => _pos[b]![2].compareTo(_pos[a]![2]));
+    return [for (final id in ids.take(10)) map[id]!];
+  }
+
+  int? positionOf(String id) {
+    final v = _pos[id];
+    return v == null ? null : v[0];
+  }
+
+  double progressOf(String id) {
+    final v = _pos[id];
+    if (v == null || v[1] <= 0) return 0;
+    return (v[0] / v[1]).clamp(0.0, 1.0).toDouble();
+  }
+
+  void savePosition(MediaItem m, int posMs, int durMs) {
+    if (m.isAudio || durMs <= 0) return;
+    if (posMs < 5000 || posMs > durMs * 0.95) {
+      _pos.remove(m.id);
+    } else {
+      _pos[m.id] = [posMs, durMs, DateTime.now().millisecondsSinceEpoch];
+    }
+    _p?.setString('pos', jsonEncode(_pos));
+  }
+
+  void touch() => notifyListeners();
+
+  void setBgPlay(bool v) {
+    bgPlay = v;
+    _p?.setBool('bg_play', v);
+    notifyListeners();
+  }
 
   bool isFav(String id) => favs.contains(id);
 
