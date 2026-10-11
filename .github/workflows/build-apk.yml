@@ -33,19 +33,22 @@ jobs:
       - name: Set app name
         run: sed -i 's/android:label="[^"]*"/android:label="ZAYAAN"/' android/app/src/main/AndroidManifest.xml
 
-      - name: Add media permissions
+      - name: Add permissions and playback service
         run: |
-          sed -i 's#<application#<uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <application#' android/app/src/main/AndroidManifest.xml
-          grep -n "uses-permission" android/app/src/main/AndroidManifest.xml
+          M=android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>\n    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <application#' $M
+          sed -i 's#</application>#    <service android:name=".KeepAliveService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>\n    </application>#' $M
+          cat $M
 
       - name: Add Z launcher icon
         run: cp -r android_res/. android/app/src/main/res/
 
-      - name: Add native brightness and volume support
+      - name: Add native code (brightness, volume, background playback, album art)
         run: |
           F=$(find android/app/src/main -name MainActivity.kt | head -n 1)
           echo "MainActivity at: $F"
           cp android_native/MainActivity.kt "$F"
+          cp android_native/KeepAliveService.kt "$(dirname "$F")/KeepAliveService.kt"
 
       - name: Force compileSdk 36 for plugins
         run: |
