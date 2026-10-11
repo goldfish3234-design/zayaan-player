@@ -1,7 +1,12 @@
 package com.zayaan.zayaan_player
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.AudioManager
+import android.media.MediaMetadataRetriever
+import android.os.Build
 import android.provider.Settings
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
@@ -51,6 +56,54 @@ class MainActivity : FlutterActivity() {
                         lp.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
                         window.attributes = lp
                         result.success(null)
+                    }
+                    "startService" -> {
+                        try {
+                            val i = Intent(this, KeepAliveService::class.java)
+                            i.putExtra("title", call.argument<String>("title") ?: "ZAYAAN")
+                            if (Build.VERSION.SDK_INT >= 26) {
+                                startForegroundService(i)
+                            } else {
+                                startService(i)
+                            }
+                        } catch (e: Exception) {
+                        }
+                        result.success(null)
+                    }
+                    "stopService" -> {
+                        try {
+                            stopService(Intent(this, KeepAliveService::class.java))
+                        } catch (e: Exception) {
+                        }
+                        result.success(null)
+                    }
+                    "notifPerm" -> {
+                        try {
+                            if (Build.VERSION.SDK_INT >= 33 &&
+                                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                            ) {
+                                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 77)
+                            }
+                        } catch (e: Exception) {
+                        }
+                        result.success(null)
+                    }
+                    "audioMeta" -> {
+                        val p = call.argument<String>("path")
+                        Thread {
+                            val out = HashMap<String, Any?>()
+                            try {
+                                val r = MediaMetadataRetriever()
+                                r.setDataSource(p)
+                                out["art"] = r.embeddedPicture
+                                out["title"] = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                                out["artist"] = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                                out["album"] = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                                r.release()
+                            } catch (e: Exception) {
+                            }
+                            runOnUiThread { result.success(out) }
+                        }.start()
                     }
                     else -> result.notImplemented()
                 }
