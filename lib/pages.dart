@@ -642,6 +642,15 @@ class HomeTab extends StatelessWidget {
                 ),
               ],
             ),
+            HSection(
+              title: 'Continue Watching',
+              items: library.continueItems,
+              showProgress: true,
+            ),
+            HSection(
+              title: 'Recently Played',
+              items: library.recentItems.take(10).toList(),
+            ),
             const SizedBox(height: 22),
             const Text(
               'Frequently Used',
@@ -787,6 +796,24 @@ class ProfileTab extends StatelessWidget {
           Material(
             color: C.card,
             borderRadius: BorderRadius.circular(18),
+            child: SwitchListTile(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              secondary: const Icon(Icons.headphones_rounded, color: C.muted),
+              title: const Text('Background playback'),
+              subtitle: const Text(
+                'Keep playing when you leave the app or lock the phone',
+                style: TextStyle(color: C.muted, fontSize: 12),
+              ),
+              value: library.bgPlay,
+              onChanged: library.setBgPlay,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Material(
+            color: C.card,
+            borderRadius: BorderRadius.circular(18),
             child: ListTile(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(18),
@@ -796,9 +823,31 @@ class ProfileTab extends StatelessWidget {
               onTap: PhotoManager.openSetting,
             ),
           ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: C.card,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Formats & quality',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'Plays MP4, MKV, MOV, WebM, 3GP and TS. HD, Full HD and 4K play when your phone can decode them in hardware. AVI, FLV and WMV may not play yet.',
+                  style: TextStyle(color: C.muted, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 22),
           const Center(
-            child: Text('Version 1.1.0', style: TextStyle(color: C.muted)),
+            child: Text('Version 1.2.0', style: TextStyle(color: C.muted)),
           ),
         ],
       ),
