@@ -15,9 +15,11 @@ Future<void> main() async {
       systemNavigationBarColor: C.card,
     ),
   );
-  try {
-    await MobileAds.instance.initialize();
-  } catch (_) {}
+  if (kAdsEnabled) {
+    try {
+      await MobileAds.instance.initialize();
+    } catch (_) {}
+  }
   var seen = false;
   try {
     final p = await SharedPreferences.getInstance();
