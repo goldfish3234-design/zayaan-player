@@ -42,11 +42,23 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   double _speed = 1.0;
   Offset _tapPos = Offset.zero;
 
-  // pinch zoom (two fingers, 1x to 4x)
+  // pinch zoom (two fingers, 1x to 4x) with two-finger pan
   final Map<int, Offset> _ptrs = {};
   double _zoom = 1.0;
   double _zoomBase = 1.0;
   double _pinchStart = 0;
+  Offset _pan = Offset.zero;
+
+  // aspect ratio: 0 original, 1 fill (crop), 2 stretch
+  int _fit = 0;
+
+  // sleep timer (minutes, 0 = off)
+  Timer? _sleepTimer;
+  int _sleepMin = 0;
+
+  // A-B repeat
+  Duration? _loopA;
+  Duration? _loopB;
 
   // screen lock
   bool _locked = false;
@@ -105,6 +117,9 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     _failed = false;
     _ended = false;
     _zoom = 1.0;
+    _pan = Offset.zero;
+    _loopA = null;
+    _loopB = null;
     _meta = null;
     _subs.clear();
     _subIdx = -1;
@@ -192,6 +207,13 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     final c = _c;
     if (c == null || !mounted) return;
     final v = c.value;
+    // A-B repeat: jump back to A when playback reaches B
+    final a = _loopA;
+    final b = _loopB;
+    if (a != null && b != null && v.isPlaying && v.position >= b) {
+      c.seekTo(a);
+      return;
+    }
     if (!_ended &&
         v.isInitialized &&
         v.duration > Duration.zero &&
@@ -259,7 +281,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     _kick();
   }
 
-  // ──────────── pinch zoom ────────────
+  // ──────────── pinch zoom + pan ────────────
 
   double _pinchDist() {
     final v = _ptrs.values.toList();
@@ -277,17 +299,75 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   void _onPtrMove(PointerMoveEvent e) {
     if (!_ptrs.containsKey(e.pointer)) return;
     _ptrs[e.pointer] = e.localPosition;
-    if (_ptrs.length == 2 && _pinchStart > 0) {
-      final z = (_zoomBase * _pinchDist() / _pinchStart)
-          .clamp(1.0, 4.0)
-          .toDouble();
-      if ((z - _zoom).abs() > 0.001) setState(() => _zoom = z);
-    }
+    if (_ptrs.length != 2 || _pinchStart <= 0) return;
+    final z = (_zoomBase * _pinchDist() / _pinchStart).clamp(1.0, 4.0).toDouble();
+    // both fingers moving together pan the zoomed video
+    final size = MediaQuery.of(context).size;
+    final dx = _pan.dx + e.localDelta.dx / 2;
+    final dy = _pan.dy + e.localDelta.dy / 2;
+    final maxX = (z - 1) * size.width / 2;
+    final maxY = (z - 1) * size.height / 2;
+    setState(() {
+      _zoom = z;
+      _pan = Offset(dx.clamp(-maxX, maxX).toDouble(), dy.clamp(-maxY, maxY).toDouble());
+    });
   }
 
   void _onPtrUp(PointerEvent e) {
     _ptrs.remove(e.pointer);
     if (_ptrs.length < 2) _pinchStart = 0;
+  }
+
+  void _resetZoom() {
+    setState(() {
+      _zoom = 1.0;
+      _pan = Offset.zero;
+    });
+  }
+
+  // ──────────── sleep timer ────────────
+
+  void _setSleep(int minutes) {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    if (minutes > 0) {
+      _sleepTimer = Timer(Duration(minutes: minutes), () {
+        _c?.pause();
+        if (!mounted) return;
+        setState(() => _sleepMin = 0);
+        _msg('Sleep timer: playback paused');
+      });
+      _msg('Sleep timer set for $minutes minutes');
+    } else {
+      _msg('Sleep timer off');
+    }
+    setState(() => _sleepMin = minutes);
+  }
+
+  // ──────────── A-B repeat ────────────
+
+  void _abTap() {
+    final c = _c;
+    if (c == null) return;
+    final p = c.value.position;
+    if (_loopA == null) {
+      setState(() => _loopA = p);
+      _msg('A set. Tap again to set B');
+    } else if (_loopB == null) {
+      if (p <= _loopA!) {
+        _msg('B must be after A');
+        return;
+      }
+      setState(() => _loopB = p);
+      _msg('A-B repeat on');
+    } else {
+      setState(() {
+        _loopA = null;
+        _loopB = null;
+      });
+      _msg('A-B repeat off');
+    }
+    _kick();
   }
 
   // ──────────── screen lock ────────────
@@ -576,6 +656,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     _hudTimer?.cancel();
     _lockTimer?.cancel();
     _saveTimer?.cancel();
+    _sleepTimer?.cancel();
     _savePos();
     _c?.removeListener(_onTick);
     _c?.dispose();
@@ -679,6 +760,57 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                   ))
               .toList(),
         ),
+      ],
+    );
+  }
+
+  // second row: sleep timer, A-B repeat, aspect ratio
+  Widget _extraRow(VideoPlayerController c) {
+    final abOn = _loopA != null;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        PopupMenuButton<int>(
+          tooltip: 'Sleep timer',
+          color: C.card2,
+          icon: Icon(
+            Icons.bedtime_rounded,
+            color: _sleepMin > 0 ? C.pink : Colors.white,
+          ),
+          onSelected: _setSleep,
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 0, child: Text('Off')),
+            PopupMenuItem(value: 15, child: Text('15 minutes')),
+            PopupMenuItem(value: 30, child: Text('30 minutes')),
+            PopupMenuItem(value: 45, child: Text('45 minutes')),
+            PopupMenuItem(value: 60, child: Text('60 minutes')),
+          ],
+        ),
+        IconButton(
+          tooltip: 'A-B repeat',
+          color: abOn ? C.pink : Colors.white,
+          icon: Icon(Icons.repeat_rounded),
+          onPressed: _abTap,
+        ),
+        if (!_item.isAudio)
+          PopupMenuButton<int>(
+            tooltip: 'Aspect ratio',
+            color: C.card2,
+            icon: Icon(
+              Icons.aspect_ratio_rounded,
+              color: _fit != 0 ? C.pink : Colors.white,
+            ),
+            initialValue: _fit,
+            onSelected: (v) {
+              setState(() => _fit = v);
+              _kick();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 0, child: Text('Original')),
+              PopupMenuItem(value: 1, child: Text('Fill (crop)')),
+              PopupMenuItem(value: 2, child: Text('Stretch')),
+            ],
+          ),
       ],
     );
   }
@@ -804,6 +936,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
               const Spacer(),
               _playRow(c),
               if (!audio) const Spacer(),
+              if (c != null) _extraRow(c),
               if (c != null) _sliderRow(c),
               const SizedBox(height: 6),
             ],
@@ -881,6 +1014,29 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  Widget _videoBox(VideoPlayerController c) {
+    switch (_fit) {
+      case 1:
+        return SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.cover,
+            child: SizedBox(
+              width: c.value.size.width,
+              height: c.value.size.height,
+              child: VideoPlayer(c),
+            ),
+          ),
+        );
+      case 2:
+        return SizedBox.expand(child: VideoPlayer(c));
+      default:
+        return AspectRatio(
+          aspectRatio: c.value.aspectRatio,
+          child: VideoPlayer(c),
+        );
+    }
   }
 
   Widget _subtitle(VideoPlayerController c) {
@@ -1051,6 +1207,11 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
             onDoubleTapDown: (d) => _tapPos = d.localPosition,
             onDoubleTap: () {
               if (_locked) return;
+              // zoomed in: double-tap goes back to normal size
+              if (_zoom > 1.0) {
+                _resetZoom();
+                return;
+              }
               final w = MediaQuery.of(context).size.width;
               _seekBy(_tapPos.dx < w / 2 ? -10 : 10);
               _kick();
@@ -1079,12 +1240,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
                         : audio
                             ? const SizedBox.shrink()
                             : ClipRect(
-                                child: Transform.scale(
-                                  scale: _zoom,
-                                  child: AspectRatio(
-                                    aspectRatio: c.value.aspectRatio,
-                                    child: VideoPlayer(c),
-                                  ),
+                                child: Transform(
+                                  alignment: Alignment.center,
+                                  transform: Matrix4.identity()
+                                    ..translate(_pan.dx, _pan.dy)
+                                    ..scale(_zoom),
+                                  child: _videoBox(c),
                                 ),
                               ),
                   ),
