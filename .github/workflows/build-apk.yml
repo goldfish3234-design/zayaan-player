@@ -31,7 +31,7 @@ jobs:
         run: flutter create --platforms=android --org com.zayaan --project-name zayaan_player .
 
       - name: Set app name
-        run: sed -i 's/android:label="[^"]*"/android:label="ZAYAAN"/' android/app/src/main/AndroidManifest.xml
+        run: sed -i 's/android:label="[^"]*"/android:label="ZEVN Player"/' android/app/src/main/AndroidManifest.xml
 
       - name: Add permissions and playback service
         run: |
@@ -100,6 +100,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk ZAYAAN.apk
+          cp build/app/outputs/flutter-apk/app-release.apk ZEVN.apk
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest ZAYAAN.apk --title "ZAYAAN latest APK" --notes "Latest build. Download ZAYAAN.apk and install." --target "${{ github.sha }}"
+          gh release create latest ZEVN.apk --title "ZEVN Player latest APK" --notes "Latest build. Download ZEVN.apk and install." --target "${{ github.sha }}"

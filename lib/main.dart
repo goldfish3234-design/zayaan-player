@@ -28,7 +28,7 @@ class ZayaanApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ZAYAAN',
+      title: 'ZEVN Player',
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       home: showIntro ? const _IntroGate() : const Shell(),
