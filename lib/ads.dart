@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
-// Google's official TEST banner ID for Android. Safe to use while developing.
-// Before publishing, replace it with the banner ID from your AdMob account.
-const String kBannerAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
+// ZEVN Player home banner ad unit from the AdMob account.
+// (Google's test banner ID, for reference: ca-app-pub-3940256099942544/6300978111)
+// Do not tap your own real ads: it can get the AdMob account banned.
+const String kBannerAdUnitId = 'ca-app-pub-7766896185357745/5750639173';
 
 class AdBanner extends StatefulWidget {
   const AdBanner({super.key});
