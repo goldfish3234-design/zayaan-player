@@ -273,7 +273,7 @@ class _PermCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           const Text(
-            'ZAYAAN needs permission to show the videos and music on your phone.',
+            'ZEVN Player needs permission to show the videos and music on your phone.',
             style: TextStyle(color: C.muted),
           ),
           const SizedBox(height: 12),
@@ -543,7 +543,7 @@ class HomeTab extends StatelessWidget {
                 const ZMark(size: 38),
                 const SizedBox(width: 10),
                 const Text(
-                  'ZAYAAN',
+                  'ZEVN Player',
                   style: TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w800,
@@ -752,7 +752,7 @@ class ProfileTab extends StatelessWidget {
           const SizedBox(height: 16),
           const Center(
             child: Text(
-              'ZAYAAN',
+              'ZEVN Player',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.w900,
@@ -847,7 +847,7 @@ class ProfileTab extends StatelessWidget {
           ),
           const SizedBox(height: 22),
           const Center(
-            child: Text('Version 1.2.0', style: TextStyle(color: C.muted)),
+            child: Text('Version 1.3.0', style: TextStyle(color: C.muted)),
           ),
         ],
       ),
