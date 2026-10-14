@@ -42,6 +42,12 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   double _speed = 1.0;
   Offset _tapPos = Offset.zero;
 
+  // pinch zoom (two fingers, 1x to 4x)
+  final Map<int, Offset> _ptrs = {};
+  double _zoom = 1.0;
+  double _zoomBase = 1.0;
+  double _pinchStart = 0;
+
   // screen lock
   bool _locked = false;
   bool _lockHint = false;
@@ -98,6 +104,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     _c = null;
     _failed = false;
     _ended = false;
+    _zoom = 1.0;
     _meta = null;
     _subs.clear();
     _subIdx = -1;
@@ -252,7 +259,38 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     _kick();
   }
 
-  // ───────────── screen lock ─────────────
+  // ──────────── pinch zoom ────────────
+
+  double _pinchDist() {
+    final v = _ptrs.values.toList();
+    return (v[0] - v[1]).distance;
+  }
+
+  void _onPtrDown(PointerDownEvent e) {
+    _ptrs[e.pointer] = e.localPosition;
+    if (_ptrs.length == 2) {
+      _pinchStart = _pinchDist();
+      _zoomBase = _zoom;
+    }
+  }
+
+  void _onPtrMove(PointerMoveEvent e) {
+    if (!_ptrs.containsKey(e.pointer)) return;
+    _ptrs[e.pointer] = e.localPosition;
+    if (_ptrs.length == 2 && _pinchStart > 0) {
+      final z = (_zoomBase * _pinchDist() / _pinchStart)
+          .clamp(1.0, 4.0)
+          .toDouble();
+      if ((z - _zoom).abs() > 0.001) setState(() => _zoom = z);
+    }
+  }
+
+  void _onPtrUp(PointerEvent e) {
+    _ptrs.remove(e.pointer);
+    if (_ptrs.length < 2) _pinchStart = 0;
+  }
+
+  // ──────────── screen lock ────────────
 
   void _lock() {
     _hideTimer?.cancel();
@@ -280,10 +318,10 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     });
   }
 
-  // ───────────── swipe: brightness / volume ─────────────
+  // ──────────── swipe: brightness / volume ────────────
 
   void _dragStart(DragStartDetails d) {
-    if (_locked) return;
+    if (_locked || _ptrs.length > 1) return;
     final w = MediaQuery.of(context).size.width;
     _dragLeft = d.localPosition.dx < w / 2;
     if (_dragLeft) {
@@ -294,7 +332,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
   }
 
   void _dragUpdate(DragUpdateDetails d) {
-    if (_locked) return;
+    if (_locked || _ptrs.length > 1) return;
     final h = MediaQuery.of(context).size.height;
     final delta = -d.delta.dy / (h * 0.7);
     if (_dragLeft) {
@@ -323,7 +361,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     });
   }
 
-  // ───────────── subtitles ─────────────
+  // ──────────── subtitles ────────────
 
   String _decode(List<int> b) {
     if (b.length >= 2 && b[0] == 0xFF && b[1] == 0xFE) {
@@ -550,7 +588,7 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // ───────────── UI ─────────────
+  // ──────────── UI ────────────
 
   Widget _btn(IconData icon, VoidCallback? onTap, {double size = 36}) {
     return IconButton(
@@ -992,71 +1030,82 @@ class _PlayerPageState extends State<PlayerPage> with WidgetsBindingObserver {
       canPop: !_locked,
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () {
-            if (_locked) {
-              _flashLock();
-              return;
-            }
-            if (_show && !audio) {
-              setState(() => _show = false);
-            } else {
+        body: Listener(
+          onPointerDown: _onPtrDown,
+          onPointerMove: _onPtrMove,
+          onPointerUp: _onPtrUp,
+          onPointerCancel: _onPtrUp,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              if (_locked) {
+                _flashLock();
+                return;
+              }
+              if (_show && !audio) {
+                setState(() => _show = false);
+              } else {
+                _kick();
+              }
+            },
+            onDoubleTapDown: (d) => _tapPos = d.localPosition,
+            onDoubleTap: () {
+              if (_locked) return;
+              final w = MediaQuery.of(context).size.width;
+              _seekBy(_tapPos.dx < w / 2 ? -10 : 10);
               _kick();
-            }
-          },
-          onDoubleTapDown: (d) => _tapPos = d.localPosition,
-          onDoubleTap: () {
-            if (_locked) return;
-            final w = MediaQuery.of(context).size.width;
-            _seekBy(_tapPos.dx < w / 2 ? -10 : 10);
-            _kick();
-          },
-          onVerticalDragStart: _dragStart,
-          onVerticalDragUpdate: _dragUpdate,
-          onVerticalDragEnd: (_) => _dragEnd(),
-          onVerticalDragCancel: _dragEnd,
-          child: Stack(
-            children: [
-              if (audio)
-                const Positioned.fill(child: GradientBg(child: SizedBox())),
-              Positioned.fill(
-                child: Center(
-                  child: c == null
-                      ? (_failed
-                          ? const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 32),
-                              child: Text(
-                                'This file cannot be played on your phone.\nThe format or codec may not be supported.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: Colors.white70),
+            },
+            onVerticalDragStart: _dragStart,
+            onVerticalDragUpdate: _dragUpdate,
+            onVerticalDragEnd: (_) => _dragEnd(),
+            onVerticalDragCancel: _dragEnd,
+            child: Stack(
+              children: [
+                if (audio)
+                  const Positioned.fill(child: GradientBg(child: SizedBox())),
+                Positioned.fill(
+                  child: Center(
+                    child: c == null
+                        ? (_failed
+                            ? const Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 32),
+                                child: Text(
+                                  'This file cannot be played on your phone.\nThe format or codec may not be supported.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              )
+                            : const CircularProgressIndicator(color: C.pink))
+                        : audio
+                            ? const SizedBox.shrink()
+                            : ClipRect(
+                                child: Transform.scale(
+                                  scale: _zoom,
+                                  child: AspectRatio(
+                                    aspectRatio: c.value.aspectRatio,
+                                    child: VideoPlayer(c),
+                                  ),
+                                ),
                               ),
-                            )
-                          : const CircularProgressIndicator(color: C.pink))
-                      : audio
-                          ? const SizedBox.shrink()
-                          : AspectRatio(
-                              aspectRatio: c.value.aspectRatio,
-                              child: VideoPlayer(c),
-                            ),
-                ),
-              ),
-              if (audio && c != null)
-                Positioned(
-                  top: 90,
-                  left: 16,
-                  right: 16,
-                  bottom: 190,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: _audioView(),
                   ),
                 ),
-              if ((_show || _failed) && !_locked) _controls(c),
-              if (c != null && _subIdx >= 0) _subtitle(c),
-              if (_hudKind != null && !_locked) _hud(),
-              if (_locked && _lockHint) _lockOverlay(),
-            ],
+                if (audio && c != null)
+                  Positioned(
+                    top: 90,
+                    left: 16,
+                    right: 16,
+                    bottom: 190,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: _audioView(),
+                    ),
+                  ),
+                if ((_show || _failed) && !_locked) _controls(c),
+                if (c != null && _subIdx >= 0) _subtitle(c),
+                if (_hudKind != null && !_locked) _hud(),
+                if (_locked && _lockHint) _lockOverlay(),
+              ],
+            ),
           ),
         ),
       ),
