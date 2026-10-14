@@ -6,6 +6,9 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 // Do not tap your own real ads: it can get the AdMob account banned.
 const String kBannerAdUnitId = 'ca-app-pub-7766896185357745/5750639173';
 
+// TEMPORARY: set to false to test whether the app opens without any ad code running.
+const bool kAdsEnabled = false;
+
 class AdBanner extends StatefulWidget {
   const AdBanner({super.key});
 
@@ -20,6 +23,7 @@ class _AdBannerState extends State<AdBanner> {
   @override
   void initState() {
     super.initState();
+    if (!kAdsEnabled) return;
     final ad = BannerAd(
       adUnitId: kBannerAdUnitId,
       size: AdSize.banner,
